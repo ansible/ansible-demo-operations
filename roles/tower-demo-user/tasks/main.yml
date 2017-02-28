@@ -1,0 +1,19 @@
+---
+- name: create the user
+  tower_user:
+    config_file: ~/.tower_cli.cfg
+    first_name: "{{ first_name }}"
+    last_name: "{{ last_name }}"
+    username: "{{ username }}"
+    email: "{{ email }}"
+    password: CHANGE_ME
+    organization: Ansible Sales Demo
+    state: present
+
+- name: associate the user with the sales demo team
+  shell: >
+    tower-cli team associate
+    --user "{{ username }}"
+    --team "Sales Demo User"
+
+- include: "{{ target_platform }}.yml"

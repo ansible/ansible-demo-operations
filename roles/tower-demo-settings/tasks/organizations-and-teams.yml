@@ -1,0 +1,16 @@
+---
+- name: create the sales demo organization
+  tower_organization:
+    config_file: ~/.tower_cli.cfg
+    name: Ansible Sales Demo
+    description: Shared org with reusable demos.
+    state: present
+
+- name: create all sales demo teams
+  tower_team:
+    config_file: ~/.tower_cli.cfg
+    name: "{{ item.name }}"
+    description: "{{ item.description | default('') }}"
+    organization: Ansible Sales Demo
+    state: present
+  with_items: "{{ sales_demo_teams }}"

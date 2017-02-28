@@ -1,0 +1,12 @@
+---
+tower_target_version: 3.0.3
+
+tower_admin_user: admin
+tower_admin_password: "{{ lookup('env', 'ANSIBLE_TOWER_ADMIN_PASSWORD' )}}"
+
+tower_db_name: "tower{{ environment_name | regex_replace('[^0-9a-zA-Z]', '') }}"
+tower_db_username: ansibledevops
+tower_db_password: "{{ lookup('env', 'ANSIBLE_TOWER_DB_PASSWORD') }}"
+tower_db_port: 5432
+
+tower_license_path: "{{ lookup('env', 'ANSIBLE_TOWER_LICENSE_PATH' )}}"

@@ -1,0 +1,70 @@
+---
+- name: create job template for onboarding demo users
+  shell: >
+    tower-cli job_template create
+    --name "Add Demo User"
+    --description "create a user that can run the shared job templates"
+    --job-type run
+    --project "Ansible Tower Demo Operations"
+    --playbook add-demo-user.yml
+    --inventory "Local Tower Management"
+    --machine-credential "Demo Admin SSH Key"
+    --cloud-credential "Demo Amazon Web Services"
+
+- name: ensure demo admins can execute and admin the onboarding job template
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    job_template: Add Demo User
+    team: Sales Demo Admin
+    role: execute
+    state: present
+
+- name: create job template for onboarding demo admins
+  shell: >
+    tower-cli job_template create
+    --name "Add Demo Admin"
+    --description "create a admin that can run the admin job templates"
+    --job-type run
+    --project "Ansible Tower Demo Operations"
+    --playbook add-demo-admin.yml
+    --inventory "Local Tower Management"
+    --machine-credential "Demo Admin SSH Key"
+    --cloud-credential "Demo Amazon Web Services"
+
+- name: ensure demo admins can run the onboarding job template
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    job_template: Add Demo Admin
+    team: Sales Demo Admin
+    role: execute
+    state: present
+
+- name: add user survey to both user and admin onboarding job templates
+  script: add-user-survey.py
+
+- name: create all sales demo job templates
+  shell: >
+    tower-cli job_template create
+    --name "{{ item.name }}"
+    --description "{{ item.description }}"
+    --job-type "{{ item.job_type }}"
+    --project "{{ item.project }}"
+    --playbook "{{ item.playbook }}"
+    --machine-credential "{{ item.machine_credential }}"
+    --cloud-credential "{{ item.cloud_credential }}"
+    --limit "{{ item.limit | default('') }}"
+    --extra-vars "{{ item.extra_vars | default('foo: bar') | from_yaml | to_yaml }}"
+    --ask-inventory-on-launch "{{ item.ask_inventory | default('no') | bool }}"
+    --ask-job-type-on-launch "{{ item.ask_job_type | default('no') | bool }}"
+  with_items: "{{ sales_demo_job_templates }}"
+
+- name: ensure all job template roles are granted
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    job_template: "{{ item.0.name }}"
+    team: "{{ item.1.name }}"
+    role: "{{ item.1.type }}"
+    state: present
+  with_subelements:
+    - "{{ sales_demo_job_templates }}"
+    - team_roles

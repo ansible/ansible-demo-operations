@@ -1,0 +1,233 @@
+---
+- name: vpc creation
+  hosts: tower-vpc
+  connection: local
+  gather_facts: no
+  become: no
+  tasks:
+    - name: ensure the vpc exists
+      ec2_vpc_net:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        name: "{{ environment_name }}-{{ inventory_hostname }}"
+        cidr_block: "{{ cidr }}"
+        dns_hostnames: yes
+        dns_support: yes
+        multi_ok: no
+        tenancy: default
+        resource_tags:
+          Name: "{{ environment_name }}-{{ inventory_hostname }}"
+        state: present
+      register: vpc
+
+    - set_fact:
+        id: "{{ vpc.vpc.id }}"
+
+    - name: ensure an internet gateway for the vpc exists
+      ec2_vpc_igw:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        vpc_id: "{{ id }}"
+        state: present
+      register: igw
+
+- name: subnet creation
+  hosts: subnet
+  connection: local
+  gather_facts: no
+  become: no
+  tasks:
+    - ec2_vpc_subnet:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        az: "{{ zone }}"
+        cidr: "{{ cidr }}"
+        vpc_id: "{{ hostvars['tower-vpc']['id'] }}"
+        resource_tags:
+          Name: "{{ environment_name }}-{{ inventory_hostname }}"
+        state: present
+      register: subnet
+
+    - set_fact:
+        id: "{{ subnet.subnet.id }}"
+
+- name: route table creation
+  hosts: tower-route-table
+  connection: local
+  gather_facts: no
+  become: no
+  tasks:
+    - name: create the route table
+      ec2_vpc_route_table:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        vpc_id: "{{ hostvars['tower-vpc']['id'] }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: igw
+        subnets:
+          - "{{ environment_name }}-tower-public-subnet-a"
+          - "{{ environment_name }}-tower-public-subnet-b"
+          - "{{ environment_name }}-tower-public-subnet-c"
+        resource_tags:
+          Name: "{{ environment_name }}-{{ inventory_hostname }}"
+        state: present
+      register: vpc
+
+- name: create resources for the tower instance
+  hosts: tower-instance
+  connection: local
+  gather_facts: no
+  become: no
+  tasks:
+    - name: create the tower security group
+      ec2_group:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        name: tower-{{ environment_name }}
+        description: all rules needed by Ansible Tower
+        vpc_id: "{{ hostvars['tower-vpc']['id'] }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: "{{ public_internet_cidr }}"
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: "{{ public_internet_cidr }}"
+          - proto: tcp
+            from_port: 8080
+            to_port: 8080
+            cidr_ip: "{{ public_internet_cidr }}"
+        rules_egress:
+          - proto: all
+            from_port: -1
+            to_port: -1
+            cidr_ip: "{{ public_internet_cidr }}"
+        state: present
+      register: tower_security_group
+
+    - name: create the tower db security group
+      ec2_group:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        name: tower-db-{{ environment_name }}
+        description: allow Ansible Tower servers
+        vpc_id: "{{ hostvars['tower-vpc']['id'] }}"
+        rules:
+          - proto: tcp
+            from_port: "{{ tower_db_port }}"
+            to_port: "{{ tower_db_port }}"
+            group_name: tower-{{ environment_name }}
+      register: tower_db_security_group
+
+    - name: create a subnet group
+      rds_subnet_group:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        name: tower-{{ environment_name }}
+        description: subnet group to use for Ansible Tower
+        subnets:
+          - "{{ hostvars['tower-public-subnet-a']['id'] }}"
+          - "{{ hostvars['tower-public-subnet-b']['id'] }}"
+          - "{{ hostvars['tower-public-subnet-c']['id'] }}"
+        state: present
+
+    - name: create an RDS PostgreSQL database (async)
+      rds:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        db_name: "{{ tower_db_name }}"
+        command: create
+        db_engine: postgres
+        instance_name: "{{ tower_db_name }}"
+        instance_type: db.m4.large
+        size: 100
+        username: "{{ tower_db_username }}"
+        password: "{{ tower_db_password }}"
+        port: "{{ tower_db_port }}"
+        publicly_accessible: no
+        vpc_security_groups: "{{ tower_db_security_group.group_id }}"
+        subnet: tower-{{ environment_name }}
+        tags:
+          Name: "tower-{{ environment_name }}"
+        wait: yes
+        wait_timeout: 900
+      async: 1000
+      poll: 0
+      register: tower_rds_instance_creation
+
+    - name: create an EC2 instance for Ansible Tower
+      ec2:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        assign_public_ip: yes
+        key_name: "{{ tower_demo_keypair_name }}"
+        group: tower-{{ environment_name }}
+        image: "{{ tower_ami }}"
+        instance_type: m4.large
+        ebs_optimized: yes
+        vpc_subnet_id: "{{ hostvars['tower-public-subnet-a']['id'] }}"
+        instance_tags:
+          Name: tower-{{ environment_name }}
+        count_tag:
+          Name: tower-{{ environment_name }}
+        exact_count: 1
+        termination_protection: yes
+        volumes:
+          - device_name: /dev/sda1
+            volume_type: gp2
+            volume_size: 150
+            delete_on_termination: false
+        wait: yes
+      register: tower_instance
+
+    - name: allocate an EIP for the Ansible Tower instance
+      ec2_eip:
+        aws_access_key: "{{ ansible_aws_access_key }}"
+        aws_secret_key: "{{ ansible_aws_secret_key }}"
+        aws_region: "{{ ansible_aws_region }}"
+        in_vpc: yes
+        device_id: "{{ tower_instance.tagged_instances[0].id }}"
+        release_on_disassociation: no
+        state: present
+      register: tower_eip
+
+    - name: wait for SSH access to Ansible Tower instance
+      wait_for:
+        port: 22
+        host: "{{ tower_eip.public_ip }}"
+        timeout: 320
+        state: started
+
+    - name: wait 10 seconds for SSH to really start
+      pause:
+        seconds: 10
+      when: tower_instance | changed
+
+    - name: wait for the RDS PostgreSQL database to be created
+      async_status:
+        jid: "{{ tower_rds_instance_creation.ansible_job_id }}"
+      register: tower_rds_instance_creation_result
+      until: tower_rds_instance_creation_result.finished
+      retries: 300
+
+    - add_host:
+        name: tower
+        ansible_host: "{{ tower_eip.public_ip }}"
+        groups: tower
+        tower_db_endpoint: "{{ tower_rds_instance_creation_result.instance.endpoint }}"
+      changed_when: False
+
+    - debug:
+        msg: 'Tower IP: {{ tower_eip.public_ip }}'

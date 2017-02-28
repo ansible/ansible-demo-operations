@@ -1,0 +1,3 @@
+---
+cidr: 10.0.128.0/18
+zone: "{{ lookup('env', 'ANSIBLE_AWS_PUBLIC_SUBNET_C_AZ') }}"

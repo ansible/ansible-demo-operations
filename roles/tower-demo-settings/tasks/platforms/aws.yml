@@ -1,0 +1,48 @@
+---
+- name: generate a demo ssh key
+  shell: ssh-keygen -b 2048 -t rsa -f /home/admin/.ssh/demo_rsa -q -N ""
+  args:
+    creates: /home/admin/.ssh/demo_rsa
+
+- name: grab the public key for the keypair
+  slurp:
+    src: /home/admin/.ssh/demo_rsa.pub
+  register: demo_key
+
+- name: create the demo machine credential
+  tower_credential:
+    config_file: ~/.tower_cli.cfg
+    name: Demo Machine Credential
+    description: Credential used for shared demos.
+    organization: Ansible Sales Demo
+    kind: ssh
+    ssh_key_data: /home/admin/.ssh/demo_rsa
+    state: present
+
+- name: create a demo aws keypair
+  ec2_key:
+    aws_access_key: "{{ ansible_aws_access_key }}"
+    aws_secret_key: "{{ ansible_aws_secret_key }}"
+    aws_region: "{{ ansible_aws_region }}"
+    name: "{{ demo_keypair_name }}"
+    key_material: "{{ demo_key.content | b64decode }}"
+    state: present
+
+- name: create the aws demo cloud credential
+  tower_credential:
+    config_file: ~/.tower_cli.cfg
+    name: Demo Cloud Credential
+    description: Cloud credential used for demos.
+    organization: Ansible Sales Demo
+    kind: aws
+    username: "{{ ansible_aws_access_key }}"
+    password: "{{ ansible_aws_secret_key }}"
+    state: present
+
+- name: ensure all users have access to the demo cloud credential
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    team: Sales Demo User
+    role: use
+    credential: Demo Amazon Web Services
+    state: present

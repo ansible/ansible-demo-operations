@@ -1,0 +1,126 @@
+---
+- name: install epel repo
+  yum:
+    name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm
+    state: present
+
+- name: import epel gpg key
+  rpm_key:
+    key: /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}
+    state: present
+
+- name: ensure all needed yum packages are installed
+  yum:
+    name: "{{ item }}"
+    update_cache: yes
+    state: present
+  with_items:
+    - bash
+    - git
+    - htop
+    - nano
+    - python
+    - python-devel
+    - python-pip
+    - openssl
+    - openssl-devel
+    - ansible
+
+- name: upgrade pip
+  shell: pip install pip --upgrade
+
+- name: ensure all needed python packages are installed
+  pip:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - ansible-tower-cli
+    - boto
+    - awscli
+    - azure
+    - pywinrm
+    - pyvmomi
+    - xmltodict
+    - shyaml
+
+- name: get current version of tower that is installed
+  shell: tower-manage --version
+  changed_when: False
+  failed_when: False
+  register: tower_current_version_check
+
+- set_fact:
+    tower_current_version: "{{ tower_current_version_check.stdout }}"
+  when: tower_current_version_check.rc == 0
+
+- set_fact:
+    tower_current_version: 0.0.0
+  when: tower_current_version_check.rc > 0
+
+- debug:
+    msg: Current Tower version is {{ tower_current_version }}
+
+- set_fact:
+    tower_installer_name: ansible-tower-setup-{{ tower_target_version }}
+
+- set_fact:
+    tower_installer_url: https://releases.ansible.com/ansible-tower/setup/{{ tower_installer_name }}.tar.gz
+
+- block:
+  - name: download the tower installer
+    get_url:
+      url: "{{ tower_installer_url }}"
+      dest: /tmp/
+    register: installer_download
+
+  - name: extract the tower installer
+    unarchive:
+      src: "{{ installer_download.dest }}"
+      dest: /tmp
+      copy: no
+
+  - name: configure the installation
+    template:
+      src: inventory.j2
+      dest: /tmp/{{ tower_installer_name }}/inventory
+
+  - name: run the setup script if necessary
+    shell: ./setup.sh
+    args:
+      chdir: /tmp/{{ tower_installer_name }}
+  when: "{{ tower_target_version | version_compare(tower_current_version, '>') }}"
+
+- name: ensure the tower license is in place
+  copy:
+    src: "{{ tower_license_path }}"
+    dest: /etc/tower/license
+    owner: awx
+    group: awx
+
+- name: ensure tower-cli is not configured for non-admin users
+  copy:
+    content: |
+      host: 127.0.0.1
+      format: json
+      description_on: false
+      verbose: false
+      color: false
+      verify_ssl: false
+      username: ''
+      password: ''
+    dest: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+  with_items:
+    - path: /var/lib/awx/.tower_cli.cfg
+      owner: awx
+    - path: /etc/tower/tower_cli.cfg
+      owner: awx
+    - path: /home/ec2-user/.tower_cli.cfg
+      owner: ec2-user
+
+- name: wait for the tower api to accept connections
+  wait_for:
+    port: 443
+    host: localhost
+    state: started

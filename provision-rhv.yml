@@ -1,0 +1,27 @@
+---
+- hosts: tower
+  connection: local
+  gather_facts: no
+  become: no
+  tasks:
+    - name: ensure the tower vm is created
+      rhev:
+        server: "{{ ansible_rhv_server }}"
+        port: "{{ ansible_rhv_server_port }}"
+        user: "{{ ansible_rhv_user }}"
+        password: "{{ ansible_rhv_password }}"
+
+        cluster: null
+        cpu_share: null
+        datacenter: null
+        disks: null
+        ifaces: null
+        image: null
+        mempol: null
+        name: null
+        osver: null
+
+
+        del_prot: yes
+        state: present
+      register: tower_vm

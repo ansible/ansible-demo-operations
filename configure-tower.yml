@@ -1,0 +1,7 @@
+- name: configure ansible tower
+  hosts: tower
+  gather_facts: no
+  become: yes
+  become_user: admin
+  roles:
+    - name: tower-demo-settings

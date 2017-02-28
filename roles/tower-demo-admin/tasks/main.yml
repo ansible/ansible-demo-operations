@@ -1,0 +1,6 @@
+---
+- name: Associate the user with the demo admin team
+  shell: >
+    tower-cli team associate
+    --team "Sales Demo Admin"
+    --user "{{ username }}"

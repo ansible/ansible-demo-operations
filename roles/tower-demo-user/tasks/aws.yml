@@ -1,0 +1,54 @@
+---
+- name: create an inventory for the user
+  tower_inventory:
+    config_file: ~/.tower_cli.cfg
+    name: "{{ username }}'s demo inventory"
+    description: Personal demo inventory for {{ username }}
+    organization: Ansible Sales Demo
+    state: present
+
+- name: create an ec2 host group in each users inventory
+  tower_group:
+    config_file: ~/.tower_cli.cfg
+    name: aws-{{ ansible_aws_region }}
+    inventory: "{{ username }}'s demo inventory"
+    credential: Demo Amazon Web Services
+    source: ec2
+    source_regions: "{{ ansible_aws_region }}"
+    instance_filters: "tag:Name=ansible-demo-{{ username }}"
+    overwrite: yes
+    overwrite_vars: yes
+    update_on_launch: yes
+    state: present
+
+- name: ensure the user has access to their own inventory
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    inventory: "{{ username }}'s demo inventory"
+    user: "{{ username }}"
+    role: "{{ item }}"
+    state: present
+  with_items:
+    - use
+    - adhoc
+    - update
+
+- name: create a scan job template for the user
+  tower_job_template:
+    config_file: ~/.tower_cli.cfg
+    name: scan {{ username }}'s demo inventory
+    job_type: scan
+    inventory: "{{ username }}'s demo inventory"
+    machine_credential: Demo Machine Credential
+    project: Default
+    playbook: Default
+    extra_vars: ansible_user=ec2-user
+    state: present
+
+- name: ensure the user can use their scan job
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    job_template: scan {{ username }}'s demo inventory
+    user: "{{ username }}"
+    role: execute
+    state: present

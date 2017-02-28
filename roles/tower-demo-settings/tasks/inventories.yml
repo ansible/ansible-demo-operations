@@ -1,0 +1,23 @@
+---
+- name: create a local inventory for admin usage
+  tower_inventory:
+    config_file: ~/.tower_cli.cfg
+    name: Local Tower Management
+    description: Inventory that just contains localhost
+    organization: Ansible Sales Demo
+    state: present
+
+- name: ensure the demo admin team has access to the local inventory
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    inventory: Local Tower Management
+    team: Sales Demo Admin
+    role: admin
+    state: present
+
+- name: add the Tower server to local inventory
+  tower_host:
+    config_file: ~/.tower_cli.cfg
+    name: "{{ ansible_host }}"
+    inventory: Local Tower Management
+    state: present

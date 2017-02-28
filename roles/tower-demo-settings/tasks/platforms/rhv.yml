@@ -1,0 +1,15 @@
+---
+- name: create the demo machine credential
+  tower_credential:
+    config_file: ~/.tower_cli.cfg
+    name: Demo Machine Credential
+    description: Credential used for shared demos.
+    organization: Ansible Sales Demo
+    kind: ssh
+    username: root
+    password: 
+    state: present
+
+- name: ensure rhv environment variables are set in /etc/tower/settings.py
+- name: ensure rhv inventory script ini file is at /etc/tower/ovirt4.ini
+- name: ensure

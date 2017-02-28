@@ -1,0 +1,3 @@
+---
+tower_ami: "{{ lookup('env', 'ANSIBLE_TOWER_AMI' ) }}"
+tower_demo_keypair_name: "{{ lookup('env', 'ANSIBLE_DEMO_KEYPAIR_NAME') }}"

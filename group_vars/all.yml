@@ -1,0 +1,18 @@
+---
+install_tower: yes
+configure_tower_base: yes
+configure_tower: no
+target_platform: aws
+
+environment_name: "{{ lookup('env', 'ANSIBLE_ENVIRONMENT_NAME') }}"
+
+public_internet_cidr: 0.0.0.0/0
+
+ansible_aws_access_key: "{{ lookup('env', 'ANSIBLE_AWS_ACCESS_KEY_ID') }}"
+ansible_aws_secret_key: "{{ lookup('env', 'ANSIBLE_AWS_SECRET_ACCESS_KEY') }}"
+ansible_aws_region: "{{ lookup('env', 'ANSIBLE_AWS_REGION') }}"
+
+ansible_rhv_server: "{{ lookup('env', 'ansible_rhv_server') }}"
+ansible_rhv_server_port: "{{ lookup('env', 'ansible_rhv_server_PORT') }}"
+ansible_rhv_user: "{{ lookup('env', 'ansible_rhv_user') }}"
+ansible_rhv_password: "{{ lookup('env', 'ansible_rhv_password') }}"

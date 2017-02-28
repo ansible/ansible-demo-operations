@@ -1,0 +1,157 @@
+---
+demo_keypair_name: ansible-sales-demo
+
+sales_demo_teams:
+  - name: Sales
+  - name: Engineering
+  - name: QA
+  - name: DevOps
+  - name: Sales Demo User
+    description: Team with permissions to run all demos.
+  - name: Sales Demo Admin
+    description: Team with permissions to onboard new demo users.
+
+sales_demo_projects:
+  - name: Ansible Examples
+    scm_url: https://github.com/wtcross/ansible-examples
+    team_roles:
+      - name: Sales Demo User
+        type: update
+      - name: Sales Demo User
+        type: use
+      - name: Sales Demo Admin
+        type: admin
+  - name: Ansible Example - Security Hardening
+    scm_url: https://github.com/wtcross/ansible-example-security-hardening
+    team_roles:
+      - name: Sales Demo User
+        type: update
+      - name: Sales Demo User
+        type: use
+      - name: Sales Demo Admin
+        type: admin
+
+sales_demo_job_templates:
+  - name: Terminate Demo Instances
+    description: "Shut down and delete a user's demo instances in AWS by Tower username"
+    job_type: run
+    project: Ansible Examples
+    playbook: provisioning/aws/user-deprovision.yml
+    ask_inventory: yes
+    machine_credential: Demo Machine Credential
+    cloud_credential: Demo Amazon Web Services
+    extra_vars:
+      aws_region: us-east-1
+      vpc_name: "{{ environment_name }}-tower-vpc"
+    team_roles:
+      - name: Sales Demo User
+        type: execute
+      - name: Sales Demo Admin
+        type: admin
+  - name: LAMP HA Proxy - Provision Demo Instances
+    description: Launch the LAMP HA Proxy Demo systems in AWS
+    job_type: run
+    project: Ansible Examples
+    playbook: provisioning/aws/provision.yml
+    ask_inventory: yes
+    machine_credential: Demo Machine Credential
+    cloud_credential: Demo Amazon Web Services
+    extra_vars:
+      aws_region: us-east-1
+      vpc_name: "{{ environment_name }}-tower-vpc"
+      aws_instances:
+        - count: 1
+          subnet_name: "{{ environment_name }}-tower-public-subnet-a"
+          keypair_name: "{{ demo_keypair_name }}"
+          ami_id: ami-b63769a1
+          type: t2.micro
+          tags:
+            Demo: lamp_haproxy
+            Group: dbservers
+        - count: 1
+          subnet_name: "{{ environment_name }}-tower-public-subnet-a"
+          keypair_name: "{{ demo_keypair_name }}"
+          ami_id: ami-b63769a1
+          type: t2.micro
+          tags:
+            Demo: lamp_haproxy
+            Group: webservers
+        - count: 1
+          subnet_name: "{{ environment_name }}-tower-public-subnet-a"
+          keypair_name: "{{ demo_keypair_name }}"
+          ami_id: ami-b63769a1
+          type: t2.micro
+          tags:
+            Demo: lamp_haproxy
+            Group: lbservers
+        - count: 1
+          subnet_name: "{{ environment_name }}-tower-public-subnet-a"
+          keypair_name: "{{ demo_keypair_name }}"
+          ami_id: ami-b63769a1
+          type: t2.micro
+          tags:
+            Demo: lamp_haproxy
+            Group: monitoring
+    team_roles:
+      - name: Sales Demo User
+        type: execute
+      - name: Sales Demo Admin
+        type: admin
+  - name: LAMP HA Proxy - Deploy App
+    description: Deploy an entire LAMP and HA Proxy environment to AWS
+    job_type: run
+    project: Ansible Examples
+    playbook: lamp_haproxy/aws-site.yml
+    ask_inventory: yes
+    machine_credential: Demo Machine Credential
+    cloud_credential: Demo Amazon Web Services
+    limit: tag_Demo_lamp_haproxy
+    extra_vars:
+      repository: https://github.com/wtcross/mywebapp.git
+      webapp_version: 874944f067c540d336d2b85ad69d5decd0cba2f1
+      ansible_user: ec2-user
+    team_roles:
+      - name: Sales Demo User
+        type: execute
+      - name: Sales Demo Admin
+        type: admin
+  - name: Security Hardening - Provision Demo Instances
+    description: Launch a few demo instances in AWS
+    job_type: run
+    project: Ansible Examples
+    playbook: provisioning/aws/provision.yml
+    ask_inventory: yes
+    machine_credential: Demo Machine Credential
+    cloud_credential: Demo Amazon Web Services
+    extra_vars:
+      aws_region: us-east-1
+      vpc_name: "{{ environment_name }}-tower-vpc"
+      aws_instances:
+        - count: 4
+          subnet_name: "{{ environment_name }}-tower-public-subnet-a"
+          keypair_name: "{{ demo_keypair_name }}"
+          ami_id: ami-b63769a1
+          type: t2.micro
+          tags:
+            Demo: security_hardening
+    team_roles:
+      - name: Sales Demo User
+        type: execute
+      - name: Sales Demo Admin
+        type: admin
+  - name: Security Hardening - 800-53
+    description: Apply 800-53 security controls
+    job_type: run
+    project: Ansible Example - Security Hardening
+    playbook: 800-53.yml
+    ask_inventory: yes
+    machine_credential: Demo Machine Credential
+    cloud_credential: Demo Amazon Web Services
+    limit: tag_Demo_security_hardening
+    extra_vars:
+      ansible_user: ec2-user
+    team_roles:
+      - name: Sales Demo User
+        type: execute
+      - name: Sales Demo Admin
+        type: admin

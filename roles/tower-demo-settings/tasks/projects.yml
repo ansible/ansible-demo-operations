@@ -1,0 +1,51 @@
+---
+- name: create the sales demo admin project
+  tower_project:
+    config_file: ~/.tower_cli.cfg
+    name: Ansible Tower Demo Operations
+    description: Management playbooks for Ansible Tower shared demos.
+    organization: Ansible Sales Demo
+    scm_type: git
+    scm_url: https://github.com/wtcross/ansible-demo-operations
+    scm_branch: master
+    scm_clean: yes
+    scm_delete_on_update: yes
+    scm_update_on_launch: yes
+    state: present
+
+- name: ensure all admins have use and admin access to the admin project
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    team: Sales Demo Admin
+    role: "{{ item }}"
+    project: Ansible Tower Demo Operations
+    state: present
+  with_items:
+    - use
+    - admin
+
+- name: create all sales demo projects
+  tower_project:
+    config_file: ~/.tower_cli.cfg
+    name: "{{ item.name }}"
+    description: "{{ item.description | default('') }}"
+    organization: Ansible Sales Demo
+    scm_type: "{{ item.scm_type | default('git') }}"
+    scm_url: "{{ item.scm_url }}"
+    scm_branch: "{{ item.scm_branch | default('master') }}"
+    scm_clean: "{{ item.scm_clean | default('yes') | bool }}"
+    scm_delete_on_update: "{{ item.scm_delete_on_update | default('yes') | bool }}"
+    scm_update_on_launch: "{{ item.scm_update_on_launch | default('yes') | bool }}"
+    state: present
+  with_items: "{{ sales_demo_projects }}"
+
+- name: ensure all project roles are granted
+  tower_role:
+    config_file: ~/.tower_cli.cfg
+    team: "{{ item.1.name }}"
+    role: "{{ item.1.type }}"
+    project: "{{ item.0.name }}"
+    state: present
+  with_subelements:
+    - "{{ sales_demo_projects }}"
+    - team_roles
